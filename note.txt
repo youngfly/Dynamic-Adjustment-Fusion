@@ -1,0 +1,78 @@
+官方代码训练
+1. train model lidar detection
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/lidar.yaml
+
+2. train model camera detection
+torchpack dist-run -np 8 python tools/train.py configs_yyr/centerhead/camera.yaml --model.encoders.camera.backbone.init_cfg.checkpoint pretrained/swint-nuimages-pretrained.pth
+
+3. train model bev-fusion detection
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion.yaml --model.encoders.camera.backbone.init_cfg.checkpoint pretrained/swint-nuimages-pretrained.pth --load_from pretrained/lidar-only-det.pth
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion.yaml
+CUDA_VISIBLE_DEVICES=0,1,2,3 PORT=28456 tools/dist_train.sh configs_yyr/transfusion/fusion.yaml 4
+CUDA_VISIBLE_DEVICES=4,5,6,7 PORT=28457 tools/dist_train.sh configs_yyr/transfusion/fusion.yaml 4
+
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion.yaml --model.encoders.camera.backbone.init_cfg.checkpoint pretrained/swint-nuimages-pretrained.pth --load_from pretrained/lidar-only-det.pth
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion.yaml
+torchpack dist-run -np 4 python tools/train.py configs_yyr/transfusion/fusion.yaml
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 PORT=28456 tools/dist_train.sh configs_yyr/transfusion/fusion.yaml 4
+CUDA_VISIBLE_DEVICES=4,5,6,7 PORT=28457 tools/dist_train.sh configs_yyr/transfusion/fusion.yaml 4
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 PORT=28456 tools/dist_train.sh configs_yyr/transfusion/fusion_head_inter.yaml 4
+CUDA_VISIBLE_DEVICES=4,5,6,7 PORT=28457 tools/dist_train.sh configs_yyr/transfusion/fusion_head_inter.yaml 4
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 PORT=28457 tools/dist_train.sh configs_yyr/transfusion/fusion_head_inter.yaml 8
+
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion_head_inter.yaml
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 PORT=28456 tools/dist_train.sh configs_yyr/transfusion/fusion_inter.yaml 4
+CUDA_VISIBLE_DEVICES=4,5,6,7 PORT=28457 tools/dist_train.sh configs_yyr/transfusion/fusion_inter.yaml 4
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion.yaml
+
+
+官方模型测试
+torchpack dist-run -np 4 python tools/test.py configs_yyr/transfusion/fusion.yaml pretrained/bevfusion-det.pth --eval bbox
+torchpack dist-run -np 8 python tools/test.py configs_yyr/transfusion/fusion.yaml pretrained/bevfusion-det.pth --eval bbox
+
+自己模型测试
+torchpack dist-run -np 8 python tools/test.py configs_yyr/transfusion/fusion.yaml runs/run-51c5d35d/epoch_6.pth --eval bbox
+torchpack dist-run -np 8 python tools/test.py configs_yyr/transfusion/fusion.yaml runs/fusion_cam_grid/epoch_6.pth --eval bbox
+
+编码器部分
+训练noise的版本
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion_noise.yaml --model.encoders.camera.backbone.init_cfg.checkpoint pretrained/swint-nuimages-pretrained.pth --load_from pretrained/lidar-only-det.pth
+torchpack dist-run -np 8 python tools/test.py configs_yyr/transfusion/fusion_noise.yaml pretrained/bevfusion-det.pth --eval bbox
+训练inter的版本
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion_inter.yaml --model.encoders.camera.backbone.init_cfg.checkpoint pretrained/swint-nuimages-pretrained.pth --load_from pretrained/lidar-only-det.pth
+
+从自己模型上面resume的模型
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion_inter.yaml --resume_from runs/fusion_F3_cc+cl_ll+lc/epoch_3.pth
+编码器部分
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion_inter.yaml --load_from pretrained/bevfusion-det.pth
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion_inter.yaml --load_from pretrained/lidar-only-det.pth
+解码器部分
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion_head_inter.yaml --load_from pretrained/bevfusion-det.pth
+torchpack dist-run -np 8 python tools/train.py configs_yyr/transfusion/fusion_head_inter.yaml --load_from pretrained/lidar-only-det.pth
+
+单卡调试程序-编码器
+torchpack dist-run -np 1 python tools/train.py configs_yyr/transfusion/fusion_inter.yaml  --load_from pretrained/bevfusion-det.pth
+单卡调试程序-解码器
+torchpack dist-run -np 1 python tools/train.py configs_yyr/transfusion/fusion_head_inter.yaml  --load_from pretrained/bevfusion-det.pth
+单卡测试camera-single
+torchpack dist-run -np 1 python tools/train.py configs_yyr/centerhead/camera_inter.yaml  --load_from pretrained/camera-only-det.pth
+
+可视化测试
+torchpack dist-run -np 8 python tools/visualize.py configs_yyr/transfusion/fusion.yaml
+数据统计测试
+torchpack dist-run -np 8 python tools/statical.py configs_yyr/transfusion/fusion.yaml
+
+
+蒸馏相关
+训练学生模型
+torchpack dist-run -np 8 python tools/train.py configs_yyr/distill/r18.yaml --load_from pretrained/lidar-only-det.pth
+训练蒸馏模型
+torchpack dist-run -np 8 python tools/train.py configs_yyr/distill/D_r18.yaml --load_from pretrained/lidar-only-det.pth
+
+测试配置
+evalai set_token eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTcxMDgyOTQ5NywianRpIjoiNzgwOGEwYWY0MTc3NDU2NmIyYTFhMWJjMDg1NTgyOWYiLCJ1c2VyX2lkIjoyOTA1M30.Po2cXxT1ui7nq2qTmMQlvwCJoFbucY5O7o9au3KVG1E
+
+evalai challenge 356 phase 744 submit --file results_nusc.json --large --private

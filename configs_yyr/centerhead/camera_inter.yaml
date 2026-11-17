@@ -1,0 +1,181 @@
+model:
+  type: BEVFusion_inter
+  encoders:
+    lidar: null
+    camera:
+      backbone:
+        type: SwinTransformer
+        embed_dims: 96
+        depths: [2, 2, 6, 2]
+        num_heads: [3, 6, 12, 24]
+        window_size: 7
+        mlp_ratio: 4
+        qkv_bias: true
+        qk_scale: null
+        drop_rate: 0.
+        attn_drop_rate: 0.
+        drop_path_rate: 0.2
+        patch_norm: true
+        out_indices: [1, 2, 3]
+        with_cp: false
+        convert_weights: true
+        init_cfg:
+          type: Pretrained
+          checkpoint: /root/paddlejob/workspace/yyr/code/bevfusion-main/pretrained/swint-nuimages-pretrained.pth
+      neck:
+        type: GeneralizedLSSFPN
+        in_channels: [192, 384, 768]
+        out_channels: 256
+        start_level: 0
+        num_outs: 3
+        norm_cfg:
+          type: BN2d
+          requires_grad: true
+        act_cfg:
+          type: ReLU
+          inplace: true
+        upsample_cfg:
+          mode: bilinear
+          align_corners: false
+      vtransform:
+        type: LSSTransform
+        image_size: ${image_size}
+        in_channels: 256
+        out_channels: 80
+        feature_size: ${[image_size[0] // 8, image_size[1] // 8]}
+        xbound: [-51.2, 51.2, 0.4]
+        ybound: [-51.2, 51.2, 0.4]
+        zbound: [-10.0, 10.0, 20.0]
+        dbound: [1.0, 60.0, 0.5]
+        downsample: 2
+  decoder:
+    backbone:
+      type: GeneralizedResNet
+      in_channels: 80
+      blocks:
+        - [2, 128, 2]
+        - [2, 256, 2]
+        - [2, 512, 1]
+    neck:
+      type: LSSFPN
+      in_indices: [-1, 0]
+      in_channels: [512, 128]
+      out_channels: 256
+      scale_factor: 2
+  heads:
+    object:
+      type: CenterHead
+      in_channels: 256
+      train_cfg:
+        point_cloud_range: ${point_cloud_range}
+        grid_size: [1024, 1024, 1]
+        voxel_size: ${voxel_size}
+        out_size_factor: 8
+        dense_reg: 1
+        gaussian_overlap: 0.1
+        max_objs: 500
+        min_radius: 2
+        code_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2]
+      test_cfg:
+        post_center_limit_range: [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
+        max_per_img: 500
+        max_pool_nms: false
+        min_radius: [4, 12, 10, 1, 0.85, 0.175]
+        score_threshold: 0.1
+        out_size_factor: 8
+        voxel_size: ${voxel_size[:2]}
+        pre_max_size: 1000
+        post_max_size: 83
+        nms_thr: 0.2
+        nms_type:
+          - circle
+          - rotate
+          - rotate
+          - circle
+          - rotate
+          - rotate
+        nms_scale:
+          - [1.0]
+          - [1.0, 1.0]
+          - [1.0, 1.0]
+          - [1.0]
+          - [1.0, 1.0]
+          - [2.5, 4.0]
+      tasks:
+        - ["car"]
+        - ["truck", "construction_vehicle"]
+        - ["bus", "trailer"]
+        - ["barrier"]
+        - ["motorcycle", "bicycle"]
+        - ["pedestrian", "traffic_cone"]
+      common_heads:
+        reg: [2, 2]
+        height: [1, 2]
+        dim: [3, 2]
+        rot: [2, 2]
+        vel: [2, 2]
+      share_conv_channel: 64
+      bbox_coder:
+        type: CenterPointBBoxCoder
+        pc_range: ${point_cloud_range}
+        post_center_range: [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
+        max_num: 500
+        score_threshold: 0.1
+        out_size_factor: 8
+        voxel_size: ${voxel_size[:2]}
+        code_size: 9
+      separate_head:
+        type: SeparateHead
+        init_bias: -2.19
+        final_kernel: 3
+      loss_cls:
+        type: GaussianFocalLoss
+        reduction: mean
+      loss_bbox:
+        type: L1Loss
+        reduction: mean
+        loss_weight: 0.25
+      norm_bbox: true
+    map: null
+  fuser: null
+
+
+optimizer:
+  type: AdamW
+  lr: 2.0e-4
+  weight_decay: 0.01
+  paramwise_cfg:
+    custom_keys:
+      absolute_pos_embed:
+        decay_mult: 0
+      relative_position_bias_table:
+        decay_mult: 0
+      encoders.camera.backbone:
+        lr_mult: 0.1
+
+momentum_config:
+  policy: cyclic
+  cyclic_times: 1
+  step_ratio_up: 0.4
+
+optimizer_config:
+  grad_clip:
+    max_norm: 35
+    norm_type: 2
+
+lr_config:
+  policy: cyclic
+  target_ratio: 5.0
+  cyclic_times: 1
+  step_ratio_up: 0.4
+
+augment3d:
+  scale: [0.95, 1.05]
+  rotate: [-0.3925, 0.3925]
+  translate: 0
+
+image_size: [256, 704]
+
+data:
+  samples_per_gpu: 2
+max_epochs: 6
